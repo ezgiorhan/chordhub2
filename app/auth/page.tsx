@@ -1,14 +1,17 @@
 "use client";
 import { useState } from "react";
-import { auth } from "../../lib/firebase";
+import { auth, db } from "../../lib/firebase";
+import { doc, setDoc } from "firebase/firestore";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
+
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -21,7 +24,12 @@ export default function AuthPage() {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, "users", userCredential.user.uid), {
+  username,
+  email,
+  createdAt: new Date(),
+});
       }
       router.push("/");
     } catch (err: any) {
@@ -36,6 +44,17 @@ export default function AuthPage() {
           {isLogin ? "Giriş Yap" : "Kayıt Ol"}
         </h1>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+
+{!isLogin && (
+  <input
+    type="text"
+    placeholder="Kullanıcı adı"
+    value={username}
+    onChange={(e) => setUsername(e.target.value)}
+    className="border border-slate-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+    required
+  />
+)}
           <input
             type="email"
             placeholder="E-posta"

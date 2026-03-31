@@ -31,6 +31,7 @@ interface Song {
   lyrics: string;
   chords: string;
   key: string;
+  youtube?: string;
 }
 
 interface Playlist {
@@ -46,13 +47,14 @@ interface Note {
 
 export default function Home() {
   const [user, loading] = useAuthState(auth);
+  const isAdmin = user?.email === "orhanezgihatice@gmail.com";
   const router = useRouter();
 
   const [songs, setSongs] = useState<Song[]>([]);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [semitones, setSemitones] = useState(0);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title:"", artist:"", lyrics:"", chords:"", key:"Am" });
+  const [form, setForm] = useState({ title:"", artist:"", lyrics:"", chords:"", key:"Am", youtube:"" });
 
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
@@ -96,7 +98,7 @@ export default function Home() {
     await addDoc(collection(db, "songs"), {
       ...form, createdBy: user!.uid, createdAt: serverTimestamp(),
     });
-    setForm({ title:"", artist:"", lyrics:"", chords:"", key:"Am" });
+    setForm({ title:"", artist:"", lyrics:"", chords:"", key:"Am", youtube:"" });
     setShowForm(false);
     loadSongs();
   };
@@ -212,8 +214,7 @@ export default function Home() {
             <>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-medium text-slate-600">Tüm Şarkılar</span>
-                <button onClick={() => setShowForm(!showForm)}
-                  className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700">+ Ekle</button>
+                {isAdmin && <button onClick={() => setShowForm(!showForm)} className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700">+ Ekle</button>}
               </div>
               {showForm && (
                 <form onSubmit={addSong} className="bg-white rounded-xl border border-slate-200 p-4 mb-4 flex flex-col gap-2">
@@ -226,9 +227,7 @@ export default function Home() {
                   <input placeholder="Ton (örn: Am)" value={form.key}
                     onChange={e => setForm({...form, key: e.target.value})}
                     className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  <input placeholder="Akorlar (Am,F,C,G)" value={form.chords}
-                    onChange={e => setForm({...form, chords: e.target.value})}
-                    className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+<input placeholder="YouTube linki (https://...)" value={form.youtube} onChange={e => setForm({...form, youtube: e.target.value})} className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   <textarea placeholder="Şarkı sözleri" value={form.lyrics}
                     onChange={e => setForm({...form, lyrics: e.target.value})}
                     rows={3} className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
@@ -248,7 +247,7 @@ export default function Home() {
     <p className="text-xs text-slate-400">{song.artist} · {song.key}</p>
   </div>
   <span
-    onClick={(e) => { e.stopPropagation(); deleteSong(song.id); }}
+    onClick={(e) => { e.stopPropagation(); if(isAdmin) deleteSong(song.id); }}
     className="text-xs text-slate-300 hover:text-red-400 flex-shrink-0 ml-2"
   >✕</span>
 </div>
@@ -282,10 +281,10 @@ export default function Home() {
                       selectedPlaylist?.id === pl.id ? "bg-indigo-50 border-indigo-200" : "bg-white border-slate-200 hover:border-indigo-200"}`}>
                     <div className="flex items-center justify-between">
   <p className="font-medium text-sm text-slate-800">🎵 {pl.name}</p>
-  <span
-    onClick={(e) => { e.stopPropagation(); deletePlaylist(pl.id); }}
-    className="text-xs text-slate-300 hover:text-red-400"
-  >✕</span>
+  {isAdmin && <span
+  onClick={(e) => { e.stopPropagation(); deletePlaylist(pl.id); }}
+  className="text-xs text-slate-300 hover:text-red-400 flex-shrink-0 ml-2"
+>✕</span>}
 </div>
                   </button>
                 ))}
@@ -328,6 +327,12 @@ export default function Home() {
 </button>
                   <h2 className="text-2xl font-bold text-slate-800">{selectedSong.title}</h2>
                   <p className="text-slate-500">{selectedSong.artist}</p>
+                  {selectedSong.youtube && (
+  <a href={selectedSong.youtube} target="_blank" rel="noopener noreferrer"
+    className="inline-flex items-center gap-1.5 text-sm text-red-500 hover:text-red-600 mb-4">
+    ▶ YouTube'da Dinle
+  </a>
+)}
                 </div>
                 <button onClick={() => setShowAddToPlaylist(!showAddToPlaylist)}
                   className="text-xs bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-200">

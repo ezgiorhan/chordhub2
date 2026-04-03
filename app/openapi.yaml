@@ -1,0 +1,393 @@
+openapi: 3.0.3
+info:
+  title: ChordHub API
+  description: |
+    ChordHub, kullanıcıların şarkı sözlerine ve akorlarına erişebildiği,
+    kendi çalma listelerini yönetebildiği dijital bir müzik platformudur.
+    
+    ## Özellikler
+    - Kullanıcı kayıt ve kimlik doğrulama (Firebase Auth)
+    - Şarkı yönetimi (CRUD)
+    - Transpoze algoritması
+    - Çalma listesi yönetimi
+    - Kişisel not sistemi
+  version: 1.0.0
+  contact:
+    name: ChordHub Geliştirici Ekibi
+    email: orhanezgihatice@gmail.com
+
+servers:
+  - url: https://firestore.googleapis.com/v1/projects/chordhub-fdccd/databases/(default)/documents
+    description: Firebase Firestore (Production)
+  - url: http://localhost:3000
+    description: Next.js Frontend (Local)
+
+tags:
+  - name: Auth
+    description: Kullanıcı kimlik doğrulama işlemleri
+  - name: Songs
+    description: Şarkı CRUD operasyonları
+  - name: Playlists
+    description: Çalma listesi yönetimi
+  - name: Notes
+    description: Kişisel not yönetimi
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Yeni kullanıcı kaydı
+      description: E-posta, şifre ve kullanıcı adı ile yeni hesap oluşturur.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, username]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: kullanici@email.com
+                password:
+                  type: string
+                  minLength: 6
+                  example: sifre123
+                username:
+                  type: string
+                  example: muzisyen42
+      responses:
+        '200':
+          description: Kayıt başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Geçersiz veri
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Kullanıcı girişi
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Giriş başarılı
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Hatalı e-posta veya şifre
+
+  /songs:
+    get:
+      tags: [Songs]
+      summary: Tüm şarkıları listele
+      description: Platforma eklenmiş tüm şarkıları tarihe göre sıralı döndürür.
+      responses:
+        '200':
+          description: Şarkı listesi
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Song'
+    post:
+      tags: [Songs]
+      summary: Yeni şarkı ekle
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SongInput'
+      responses:
+        '201':
+          description: Şarkı oluşturuldu
+        '401':
+          description: Yetkisiz erişim
+
+  /songs/{songId}:
+    delete:
+      tags: [Songs]
+      summary: Şarkı sil (Sadece Admin)
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: songId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Şarkı silindi
+        '403':
+          description: Yetersiz yetki
+
+  /songs/{songId}/transpose:
+    post:
+      tags: [Songs]
+      summary: Akorları transpoze et
+      description: |
+        Şarkının akorlarını verilen yarı ton miktarı kadar kaydırır.
+        Algoritma: T(n, s) = ((n + s) % 12 + 12) % 12
+      parameters:
+        - name: songId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                semitones:
+                  type: integer
+                  minimum: -6
+                  maximum: 6
+                  example: 2
+                useFlats:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Transpoze edilmiş akorlar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chords:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Bm", "G", "D", "A"]
+
+  /playlists:
+    get:
+      tags: [Playlists]
+      summary: Kullanıcının çalma listelerini getir
+      security:
+        - firebaseAuth: []
+      responses:
+        '200':
+          description: Çalma listeleri
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Playlist'
+    post:
+      tags: [Playlists]
+      summary: Yeni çalma listesi oluştur
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Gitar Pratiği
+      responses:
+        '201':
+          description: Liste oluşturuldu
+
+  /playlists/{playlistId}:
+    delete:
+      tags: [Playlists]
+      summary: Çalma listesini sil
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: playlistId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Liste silindi
+
+  /playlists/{playlistId}/songs:
+    post:
+      tags: [Playlists]
+      summary: Listeye şarkı ekle
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: playlistId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                songId:
+                  type: string
+      responses:
+        '200':
+          description: Şarkı listeye eklendi
+
+  /notes:
+    post:
+      tags: [Notes]
+      summary: Şarkıya kişisel not ekle
+      security:
+        - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                songId:
+                  type: string
+                content:
+                  type: string
+                  example: Bu şarkıda kapodaster 2. perdede
+      responses:
+        '201':
+          description: Not eklendi
+
+  /notes/{noteId}:
+    delete:
+      tags: [Notes]
+      summary: Notu sil
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Not silindi
+
+components:
+  securitySchemes:
+    firebaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Firebase Authentication token
+
+  schemas:
+    AuthResponse:
+      type: object
+      properties:
+        uid:
+          type: string
+        email:
+          type: string
+        username:
+          type: string
+        token:
+          type: string
+
+    Song:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+          example: Seni Kendime Sakladım
+        artist:
+          type: string
+          example: Duman
+        key:
+          type: string
+          example: Am
+        chords:
+          type: string
+          example: Am,F,C,G
+        lyrics:
+          type: string
+        youtube:
+          type: string
+          example: https://youtube.com/watch?v=...
+        createdByUsername:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    SongInput:
+      type: object
+      required: [title, artist]
+      properties:
+        title:
+          type: string
+        artist:
+          type: string
+        key:
+          type: string
+        chords:
+          type: string
+        lyrics:
+          type: string
+        youtube:
+          type: string
+
+    Playlist:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Note:
+      type: object
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+        songId:
+          type: string
+        userId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
